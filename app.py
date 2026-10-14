@@ -1,52 +1,65 @@
-import streamlit as st
-import requests
+import streamlit as st, requests, urllib.parse, numpy as np, imageio
 from PIL import Image
 from io import BytesIO
-import urllib.parse
 
-st.set_page_config(page_title="AUREI KALOS - Luxury AI Fashion Atelier", layout="centered", page_icon="✨")
+st.set_page_config(page_title="AUREI KALOS PRO", page_icon="✨")
+st.title("✨ AUREI KALOS - PRO")
+st.caption("Luxury Atelier - HD Face, No Watermark")
 
-st.markdown("""
-<style>
-.stApp { background-color: #0e1117; }
-h1 { color: gold; text-align: center; }
-</style>
-""", unsafe_allow_html=True)
+prompt = st.text_area("Prompt", "Elegant golden evening gown, African luxury supermodel, runway")
+style = st.selectbox("Style", ["Luxury Gold", "Runway Video", "Couture"])
+mode = st.radio("Mode", ["📸 Image HD", "🎬 Video HD"])
 
-st.title("✨ AUREI KALOS")
-st.markdown("<h3 style='text-align:center; color:#aaa;'>Luxury AI Fashion Atelier</h3>", unsafe_allow_html=True)
-
-prompt = st.text_area("Enter your design prompt", placeholder="Elegant golden evening gown, African luxury, flowing silk, runway...")
-style = st.selectbox("Style", ["Luxury Gold", "Afro Futurism", "Haute Couture", "Bridal Elegance", "Street Luxury"])
-
-ref = st.file_uploader("Upload reference (optional)", type=["jpg","png","jpeg"])
+def generate_image(full_prompt):
+    # NEW PROMPT ENGINEERING FOR CLEAR FACE
+    enhanced_prompt = f"{full_prompt}, (clear face, sharp focus face, beautiful symmetrical face, detailed eyes, flawless skin, high detail face), luxury fashion photography, 8k, ultra sharp, model face in focus, professional makeup"
+    encoded = urllib.parse.quote(enhanced_prompt)
+    # Use Flux model - better faces + no watermark param
+    url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1280&model=flux&enhance=true&nologo=true&nofeed=true&private=true&seed={np.random.randint(999999)}"
+    resp = requests.get(url, timeout=60)
+    img = Image.open(BytesIO(resp.content)).convert("RGB")
+    
+    # AUTO REMOVE WATERMARK - Crop bottom right watermark area
+    w, h = img.size
+    # Remove bottom 60px where watermark sits, then resize back
+    img_no_wm = img.crop((0, 0, w, h-70)) 
+    img_no_wm = img_no_wm.resize((w, h), Image.LANCZOS)
+    
+    return img_no_wm
 
 if st.button("GENERATE AUREI DESIGN", use_container_width=True):
     if not prompt:
-        st.warning("Boss, enter a design first!")
+        st.warning("Enter prompt!")
     else:
-        full_prompt = f"{prompt}, {style} style, luxury fashion photography, ultra detailed, 8k, haute couture, African luxury model"
-        encoded = urllib.parse.quote(full_prompt)
-        
-        # FREE AI GENERATOR - NO KEY NEEDED
-        image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true&enhance=true"
-        
-        with st.spinner("Aurei Atelier is designing your luxury piece... ✨"):
+        full = f"{prompt}, {style}"
+        with st.spinner("Atelier creating HD luxury design... ✨"):
             try:
-                response = requests.get(image_url, timeout=30)
-                if response.status_code == 200:
-                    img = Image.open(BytesIO(response.content))
-                    st.image(img, caption=f"AUREI KALOS: {prompt}", use_column_width=True)
-                    st.success("Design Generated! Save it boss!")
-                    
-                    # Download button
+                img = generate_image(full)
+                if mode == "📸 Image HD":
+                    st.image(img, use_column_width=True, caption="AUREI KALOS - HD No Watermark")
                     buf = BytesIO()
                     img.save(buf, format="PNG")
-                    st.download_button("📥 DOWNLOAD LUXURY DESIGN", buf.getvalue(), file_name="aurei_kalos_design.png", mime="image/png", use_container_width=True)
+                    st.download_button("📥 DOWNLOAD HD (No Watermark)", buf.getvalue(), "aurei_hd.png", "image/png", use_container_width=True)
                 else:
-                    st.error(f"Atelier busy, retry! Code {response.status_code}")
+                    st.image(img, caption="HD Design")
+                    with st.spinner("Creating HD runway video..."):
+                        frames = []
+                        w, h = img.size
+                        for i in range(60):
+                            zoom = 1.0 + i*0.005
+                            crop_w, crop_h = int(w/zoom), int(h/zoom)
+                            left = int((w-crop_w)/2)
+                            top = int((h-crop_h)/2)
+                            frame = img.crop((left, top, left+crop_w, top+crop_h)).resize((1024,1280))
+                            frames.append(np.array(frame))
+                        path = "/tmp/aurei_hd.mp4"
+                        imageio.mimsave(path, frames, fps=12, macro_block_size=1)
+                        st.video(path)
+                        with open(path, "rb") as f:
+                            st.download_button("📥 DOWNLOAD HD VIDEO", f.read(), "aurei_hd_video.mp4", "video/mp4", use_container_width=True)
+                st.success("HD Generated! No watermark! Clear face!")
             except Exception as e:
-                st.error(f"Error: {e}. Try again boss!")
+                st.error(f"Error: {e}")
 
 st.markdown("---")
-st.caption("LIVE on FREE Streamlit • AUREI KALOS Luxury Atelier • Made in Lagos 🇳🇬")
+st.caption("PRO Version: HD Face + No Watermark + Video")
