@@ -1,34 +1,52 @@
+
 import streamlit as st
 import requests
 import urllib.parse
 from PIL import Image
 from io import BytesIO
 
-st.set_page_config(page_title="AUREI KALOS PRO", page_icon="✨")
-st.title("✨ AUREI KALOS - PRO")
-st.caption("HD Face, No Watermark")
+st.set_page_config(page_title="AUREI KALOS", page_icon="✨")
+st.title("✨ AUREI KALOS")
+st.caption("HD - No Watermark - Clear Face")
 
-prompt = st.text_area("Prompt", "Elegant golden evening gown, African luxury supermodel, clear face, runway")
+prompt = st.text_area("WRITE YOUR PROMPT", placeholder="Golden gown, African queen, luxury, clear face...")
+style = st.selectbox("Style", ["Luxury Gold", "Haute Couture", "Bridal", "Royal", "Afro Futurism"])
+mode = st.selectbox("Type", ["IMAGE", "VIDEO"])
 
-if st.button("GENERATE HD DESIGN", use_container_width=True):
+ref = st.file_uploader("Upload Reference (optional)", type=["jpg","jpeg","png"])
+if ref:
+    st.image(Image.open(ref), width=250)
+
+if st.button("GENERATE", type="primary", use_container_width=True):
     if not prompt:
-        st.warning("Enter prompt boss!")
+        st.warning("Write prompt!")
     else:
-        enhanced = f"{prompt}, clear face, sharp focus face, beautiful symmetrical face, detailed eyes, flawless skin, high detail, 8k, ultra sharp, professional fashion photography"
-        encoded = urllib.parse.quote(enhanced)
-        url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1280&model=flux&enhance=true&nologo=true&seed=12345"
+        full = f"{prompt}, {style}, clear face, sharp face, beautiful eyes, luxury, 8k"
+        enc = urllib.parse.quote(full)
         
-        with st.spinner("Creating HD..."):
+        if mode == "IMAGE":
+            url = f"https://image.pollinations.ai/prompt/{enc}?width=1024&height=1280&model=flux&nologo=true"
+            r = requests.get(url, timeout=60)
+            img = Image.open(BytesIO(r.content)).convert("RGB")
+            w,h = img.size
+            img = img.crop((0,0,w,h-50))
+            st.image(img, use_column_width=True)
+            buf = BytesIO()
+            img.save(buf, format="PNG")
+            st.download_button("DOWNLOAD HD", buf.getvalue(), "aurei.png", "image/png", use_container_width=True)
+            st.success("Done - No Watermark!")
+        else:
+            vurl = f"https://gen.pollinations.ai/video/{enc}?duration=5&nologo=true"
             try:
-                resp = requests.get(url, timeout=60)
-                img = Image.open(BytesIO(resp.content)).convert("RGB")
-                # Remove watermark area
-                w, h = img.size
-                img = img.crop((0, 0, w, h-40))
-                st.image(img, use_column_width=True)
-                buf = BytesIO()
-                img.save(buf, format="PNG")
-                st.download_button("📥 DOWNLOAD HD (No Watermark)", buf.getvalue(), "aurei_hd.png", "image/png", use_container_width=True)
-                st.success("HD Clear Face! No Watermark!")
+                vr = requests.get(vurl, timeout=120)
+                if b"video" in vr.headers.get("content-type",""):
+                    st.video(vr.content)
+                    st.download_button("DOWNLOAD VIDEO", vr.content, "aurei.mp4", "video/mp4", use_container_width=True)
+                else:
+                    st.info("Video needs API key - Image works. Add key later for real video.")
+                    url = f"https://image.pollinations.ai/prompt/{enc}?width=1024&height=1280&model=flux&nologo=true"
+                    r = requests.get(url, timeout=60)
+                    img = Image.open(BytesIO(r.content)).convert("RGB")
+                    st.image(img, use_column_width=True)
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"Retry: {e}")
